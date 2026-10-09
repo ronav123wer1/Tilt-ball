@@ -1,231 +1,202 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Tilt Ball</title>
+<title>Punch Bag</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-:root{--bg:#f4f1ea;--fg:#1c1b19;--ball:#2563eb;--orb:#d97706;--bad:#dc2626;--card:#fffdf8}
-@media (prefers-color-scheme:dark){:root{--bg:#14151a;--fg:#eceae4;--ball:#60a5fa;--orb:#fbbf24;--bad:#f87171;--card:#1e2028}}
-html,body{height:100%;margin:0;background:linear-gradient(#6ec1f5,#dff3ff);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
+:root{--bg:#1b1d27;--fg:#f1efe9;--acc:#ef4444;--card:#2a2d3a}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none}
 .view{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow:auto}
 .view.on{display:flex}
 canvas{position:fixed;inset:0;width:100%;height:100%}
-.card{background:var(--card);border-radius:20px;padding:22px 20px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.15);max-height:100%;overflow:auto;box-sizing:border-box}
+.card{background:var(--card);border-radius:20px;padding:22px 20px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4);box-sizing:border-box}
 h1{margin:0 0 8px;font-size:26px}p{margin:6px 0;line-height:1.4;opacity:.85;font-size:14px}
-button{margin:6px 3px 0;font-size:16px;font-weight:700;padding:12px 22px;border:0;border-radius:999px;background:var(--ball);color:#fff;cursor:pointer}
+button{margin:6px 3px 0;font-size:16px;font-weight:700;padding:12px 22px;border:0;border-radius:999px;background:var(--acc);color:#fff;cursor:pointer}
 button.alt{background:transparent;color:var(--fg);border:2px solid var(--fg)}
-textarea{width:100%;box-sizing:border-box;height:70px;font:11px monospace;border-radius:10px;border:2px solid var(--fg);background:var(--bg);color:var(--fg);padding:6px;user-select:text;-webkit-user-select:text}
-#msg{position:fixed;top:30%;left:0;right:0;text-align:center;font-size:34px;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:none}
-#hud{position:fixed;color:#10324a;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 18px;font-weight:700;font-size:18px;pointer-events:none}
-#ov{background:color-mix(in srgb,var(--bg) 82%,transparent)}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.ok{background:#16a34a}
-#bubble{width:120px;height:120px;border-radius:50%;border:3px solid var(--fg);margin:14px auto;position:relative}
-#bubble i{position:absolute;width:26px;height:26px;border-radius:50%;background:var(--ball);left:47px;top:47px}
-.code{font-size:56px;font-weight:800;letter-spacing:.15em;color:var(--ball);margin:6px 0}
 input{font-size:30px;letter-spacing:.3em;text-align:center;width:5ch;padding:10px;border-radius:12px;border:2px solid var(--fg);background:var(--bg);color:var(--fg)}
-.err{color:var(--bad);font-size:13px}
+.code{font-size:56px;font-weight:800;letter-spacing:.15em;color:var(--acc);margin:6px 0}
+#hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 18px;font-weight:700;font-size:18px;pointer-events:none;text-shadow:0 2px 6px #000}
+#msg{position:fixed;top:24%;left:0;right:0;text-align:center;font-size:48px;font-weight:900;color:#fde047;text-shadow:0 3px 10px #000;pointer-events:none}
+#ov{background:rgba(10,10,16,.6)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:6px}.dot.ok{background:#22c55e}
+#bubble{width:110px;height:110px;border-radius:50%;border:3px solid var(--fg);margin:12px auto;position:relative}
+#bubble i{position:absolute;width:24px;height:24px;border-radius:50%;background:var(--acc);left:43px;top:43px}
+#pb{font-size:26px;padding:26px 44px;margin:10px 0}
+.err{color:#f87171;font-size:13px}
 </style></head><body>
 
-<div class="view on" id="menu"><div class="card"><h1>Tilt Ball</h1>
-<p>Tilt the stage to roll the ball to the goal, Super Monkey Ball style. No account or server needed.</p>
+<div class="view on" id="menu"><div class="card"><h1>🥊 Punch Bag</h1>
+<p>Your phone becomes the arm: it tracks your phone's movement in real time. Point to aim, thrust forward to punch.</p>
 <button id="bLocal">Play on this device</button><br>
 <button class="alt" id="bScreen">I'm the screen</button>
 <button class="alt" id="bPad">I'm the controller</button>
-<p style="font-size:12px;margin-top:12px">Phone-as-controller: open this page on both devices, then type a 4-digit code on the phone (needs internet).</p></div></div>
+<p style="font-size:12px;margin-top:12px">Phone as controller: open this page on both devices, then type a 4-digit code on the phone (needs internet).</p></div></div>
 
 <div class="view" id="screen"><canvas id="c"></canvas>
-<div id="hud"><span id="sc"></span><span id="tm"></span><span id="lv"></span></div><div id="msg"></div>
-<div class="view on" id="ov"><div class="card"><h1 id="t">Ready</h1>
-<div id="pair" style="display:none">
-<p>On your phone, open this page, tap <b>I'm the controller</b>, and enter:</p>
+<div id="hud"><span id="sc"></span><span id="tm"></span><span id="bs"></span></div><div id="msg"></div><button class="alt" id="rcl" style="display:none;position:fixed;bottom:16px;left:16px;font-size:14px;padding:8px 16px">Recenter</button>
+<div class="view on" id="ov"><div class="card"><h1 id="t">30-second round</h1>
+<p>Hold your phone like a fist, back of the phone facing the bag. The arm copies your phone live: point to aim, thrust forward to punch. Start recenters your aim.</p>
+<div id="pair" style="display:none"><p>On your phone tap <b>I'm the controller</b> and enter:</p>
 <div class="code" id="code">····</div>
-<p id="st"><span class="dot" id="dot"></span><span id="stt">Waiting for phone…</span></p></div>
+<p><span class="dot" id="dot"></span><span id="stt">Waiting for phone…</span></p></div>
 <button id="go">Start</button>
-<p style="font-size:12px">Arrow keys / WASD / mouse also work.</p><p class="err" id="serr"></p>
+<p style="font-size:12px">Mouse: move to aim, hold + release to punch. Space also punches.</p><p class="err" id="serr"></p>
 <button class="alt" id="back">Back</button></div></div></div>
 
 <div class="view" id="pad"><div class="card"><h1>Controller</h1>
 <div id="s1"><p>Enter the 4-digit code shown on the screen:</p>
 <input id="ci" inputmode="numeric" maxlength="4" autocomplete="off"><br><button id="mk">Connect</button></div>
-<div id="live" style="display:none"><p><span class="dot ok"></span>Connected — tilt to play</p>
-<div id="bubble"><i id="bi"></i></div><button id="rc">Recenter</button></div>
+<div id="live" style="display:none"><p><span class="dot ok"></span>Connected — arm is tracking your phone</p>
+<p style="font-size:12px">Point the back of the phone at the bag, then tap Recenter.</p><div id="bubble"><i id="bi"></i></div><button id="pb">PUNCH</button><br><button class="alt" id="rc">Recenter aim</button></div>
 <p class="err" id="perr"></p><button class="alt" id="pback">Back</button></div></div>
 
 <script>
 const $=id=>document.getElementById(id);
-const clamp=v=>Math.max(-1,Math.min(1,v));
+const clamp=(v,a=-1,b=1)=>Math.max(a,Math.min(b,v));
 const show=v=>{for(const e of document.body.children)if(e.classList.contains('view'))e.classList.remove('on');$(v).classList.add('on')};
-const CFG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
-async function needMotion(){
-  if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission){
-    const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw new Error('Motion access denied.')}}
-
+async function needMotion(){for(const E of [window.DeviceOrientationEvent,window.DeviceMotionEvent])
+  if(E&&E.requestPermission){const r=await E.requestPermission();if(r!=='granted')throw new Error('Motion access denied.')}}
+/* phone sensors: full orientation + live forward acceleration */
+function sensors(onState){
+  const q=new THREE.Quaternion(),q0i=new THREE.Quaternion(),dq=new THREE.Quaternion(),eu=new THREE.Euler(),
+    q1=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)),fw=new THREE.Vector3();
+  let cal=false,af=0,lastEmit=0;
+  const emit=()=>{const n=performance.now();if(n-lastEmit<14)return;lastEmit=n;
+    if(!cal){q0i.copy(q).invert();cal=true}
+    dq.copy(q).multiply(q0i);onState(dq,af)};
+  addEventListener('deviceorientation',e=>{if(e.beta==null)return;const r=Math.PI/180;
+    eu.set(e.beta*r,(e.alpha||0)*r,-e.gamma*r,'YXZ');q.setFromEuler(eu).multiply(q1);emit()});
+  addEventListener('devicemotion',e=>{const a=e.acceleration;
+    if(a&&a.x!=null){const w=new THREE.Vector3(a.x,a.y,a.z).applyQuaternion(q);fw.set(0,0,-1).applyQuaternion(q);af=w.dot(fw)}
+    emit()});
+  return{recenter(){cal=false}};
+}
 /* ---------- menu ---------- */
-let mode='local',dc=null,pc=null;
+let mode='local',dc=null,lastN=null,gyro=false,aimL={x:0,y:0},localSens=null;
+const track={have:false,q:new THREE.Quaternion(),a:0,t:0};
+function setTrack(q,a){track.have=true;track.q.set(q[0],q[1],q[2],q[3]);track.a=a;track.t=performance.now()}
 $('bLocal').onclick=async()=>{mode='local';show('screen');$('pair').style.display='none';
-  try{await needMotion();addEventListener('deviceorientation',localTilt)}catch(e){$('serr').textContent=e.message+' Using touch/keys.'}
+  try{await needMotion();localSens=sensors((q,a)=>{gyro=true;setTrack(q.toArray(),a)});$('rcl').style.display='block'}catch(e){$('serr').textContent=e.message+' Using mouse/touch.'}
   initGame()};
 $('bScreen').onclick=()=>{mode='screen';show('screen');$('pair').style.display='block';initGame();makePeer()};
 $('bPad').onclick=()=>show('pad');
 $('back').onclick=()=>location.reload();$('pback').onclick=()=>location.reload();
-
 /* ---------- screen pairing ---------- */
-let rt=null,peer=null;
 function makePeer(){
   if(typeof Peer==='undefined'){$('serr').textContent='Pairing needs internet (could not load PeerJS).';return}
   const code=String(Math.floor(Math.random()*10000)).padStart(4,'0');
-  peer=new Peer('tiltball-'+code);
+  const peer=new Peer('punchbag-'+code);
   peer.on('open',()=>{$('code').textContent=code});
   peer.on('error',e=>{if(e.type==='unavailable-id'){peer.destroy();makePeer()}else $('serr').textContent='Pairing error: '+e.type});
   peer.on('connection',conn=>{dc=conn;
     conn.on('open',()=>{$('dot').className='dot ok';$('stt').textContent='Phone connected!'});
-    conn.on('data',d=>{if(d&&typeof d==='object'){rt=d;rt.t=performance.now()}});
-    conn.on('close',()=>{$('dot').className='dot';$('stt').textContent='Disconnected';rt=null})});
+    conn.on('data',d=>{if(!d||typeof d!=='object')return;if(d.q)setTrack(d.q,d.a||0);
+      if(lastN===null)lastN=d.n;else if(d.n!==lastN){lastN=d.n;fire(.85)}});
+    conn.on('close',()=>{$('dot').className='dot';$('stt').textContent='Disconnected';track.have=false})});
 }
 const ping=m=>{try{if(dc&&dc.open)dc.send(m)}catch(e){}};
-
 /* ---------- controller ---------- */
-let base=null,lastSend=0,pdc=null;
+let pdc=null,pn=0,sens=null;
 $('mk').onclick=async()=>{$('perr').textContent='';
   const code=$('ci').value.trim();
   if(!/^\d{4}$/.test(code)){$('perr').textContent='Enter the 4-digit code.';return}
   if(typeof Peer==='undefined'){$('perr').textContent='Pairing needs internet (could not load PeerJS).';return}
   try{await needMotion()}catch(e){$('perr').textContent=e.message;return}
   const p=new Peer();
-  p.on('open',()=>{pdc=p.connect('tiltball-'+code,{serialization:'json'});
-    pdc.on('open',()=>{$('s1').style.display='none';$('live').style.display='block';addEventListener('deviceorientation',padTilt)});
-    pdc.on('data',m=>{if(navigator.vibrate)navigator.vibrate(m==='h'?200:25)});
+  p.on('open',()=>{pdc=p.connect('punchbag-'+code,{serialization:'json'});
+    pdc.on('open',()=>{$('s1').style.display='none';$('live').style.display='block';
+      sens=sensors((q,a)=>{const v=new THREE.Vector3(0,0,-1).applyQuaternion(q);
+        $('bi').style.left=(43+v.x*38)+'px';$('bi').style.top=(43-v.y*38)+'px';
+        if(pdc.open)pdc.send({q:q.toArray().map(n=>+n.toFixed(4)),a:+a.toFixed(2),n:pn})})});
+    pdc.on('data',m=>{if(m&&m.h&&navigator.vibrate)navigator.vibrate(30+m.h*200)});
     pdc.on('close',()=>{$('perr').textContent='Disconnected.'})});
   p.on('error',e=>{$('perr').textContent=e.type==='peer-unavailable'?'No screen found with that code.':'Pairing error: '+e.type});
 };
-$('rc').onclick=()=>base=null;
-function padTilt(e){
-  if(e.gamma==null)return;if(!base)base={b:e.beta,g:e.gamma};
-  const tx=clamp((e.gamma-base.g)/30),ty=clamp((e.beta-base.b)/30);
-  $('bi').style.left=(47+tx*40)+'px';$('bi').style.top=(47+ty*40)+'px';
-  const n=performance.now();if(n-lastSend<30||!pdc||!pdc.open)return;lastSend=n;
-  pdc.send({x:+tx.toFixed(3),y:+ty.toFixed(3)});
-}
-
-/* ---------- local tilt ---------- */
-let lt=null,lbase=null;
-function localTilt(e){if(e.gamma==null)return;if(!lbase)lbase={b:e.beta,g:e.gamma};
-  lt={x:clamp((e.gamma-lbase.g)/30),y:clamp((e.beta-lbase.b)/30)}}
-
+$('pb').onclick=()=>pn++;$('rcl').onclick=()=>localSens&&localSens.recenter();$('rc').onclick=()=>sens&&sens.recenter();
 /* ---------- game (3D) ---------- */
-const R=0.5;
-const LEVELS=[
- {t:45,start:[0,12],goal:[0,-13],plats:[[0,0,6,30]],ban:[[0,8],[0,2],[0,-4],[0,-9]]},
- {t:55,start:[0,12],goal:[12,-14],plats:[[0,8,6,14],[6,0,18,6],[12,-10,6,14]],ban:[[0,5],[3,0],[9,0],[12,-6],[12,-11]]},
- {t:60,start:[0,11],goal:[13,-12],plats:[[0,10,8,8],[0,0,2.2,14],[0,-12,8,10],[7,-12,6,2.2],[13,-12,6,6]],ban:[[0,10],[0,2],[0,-3],[0,-12],[7,-12],[11,-12]]}
-];
-let renderer,scene,camera,stage,ball,sun,tex,btex,gl=null,level=0,tleft=0,score=0,lives=3,run=false,looping=false,last=0;
-let bv={x:0,z:0,y:R,vy:0},plats=[],bananas=[],goalPos=[0,0],ts={x:0,y:0},keys={},drag=null,best=0,msgT=0,inited=false;
-try{best=+localStorage.getItem('tiltball-best')||0}catch(e){}
-function checker(c1,c2){const cv=document.createElement('canvas');cv.width=cv.height=64;const g=cv.getContext('2d');
-  g.fillStyle=c1;g.fillRect(0,0,64,64);g.fillStyle=c2;g.fillRect(0,0,32,32);g.fillRect(32,32,32,32);
-  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+let renderer,scene,camera,inited=false,looping=false,last=0,run=false;
+let upper,fore,elbowM,glove,bagG,bagM,shadow,score=0,tleft=30,best=0,combo=0,lastHit=0,shake=0,msgT=0;
+let ax=0,az=0,wx=0,wz=0,aim={x:0,y:0},charge=0,ext=0,extv=0,prevFist=null,lastHitT=0;
+try{best=+localStorage.getItem('punchbag-best')||0}catch(e){}
+const S=new THREE.Vector3(1.3,1.5,4.0),PIV=new THREE.Vector3(0,6,0),L=3.2,Y=new THREE.Vector3(0,1,0);
+const mat=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.6},o));
 function init3d(){
   if(inited)return;inited=true;
-  renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true,alpha:true});
-  renderer.shadowMap.enabled=true;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
-  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(60,1,.1,200);
-  scene.add(new THREE.HemisphereLight(0xffffff,0x6b8aa8,.75));
-  sun=new THREE.DirectionalLight(0xffffff,.8);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
-  const sc=sun.shadow.camera;sc.left=sc.bottom=-14;sc.right=sc.top=14;sc.far=60;scene.add(sun,sun.target);
-  stage=new THREE.Group();scene.add(stage);
-  tex=checker('#f59e0b','#fde68a');
-  const bc=document.createElement('canvas');bc.width=bc.height=64;const g=bc.getContext('2d');
-  for(let i=0;i<8;i++){g.fillStyle=i%2?'#e0f2fe':'#2563eb';g.fillRect(i*8,0,8,64)}
-  btex=new THREE.CanvasTexture(bc);
-  ball=new THREE.Mesh(new THREE.SphereGeometry(R,24,18),new THREE.MeshStandardMaterial({map:btex,roughness:.4}));
-  ball.castShadow=true;stage.add(ball);
+  renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x1b1d27);
+  camera=new THREE.PerspectiveCamera(60,1,.1,100);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x444455,.8));
+  const sun=new THREE.DirectionalLight(0xffffff,.7);sun.position.set(4,10,8);scene.add(sun);
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(40,40),mat(0x3a3d4d));fl.rotation.x=-Math.PI/2;scene.add(fl);
+  const wall=new THREE.Mesh(new THREE.PlaneGeometry(40,16),mat(0x2e3a5c));wall.position.set(0,8,-6);scene.add(wall);
+  const beam=new THREE.Mesh(new THREE.BoxGeometry(6,.4,.6),mat(0x777777));beam.position.copy(PIV).add(new THREE.Vector3(0,.2,0));scene.add(beam);
+  shadow=new THREE.Mesh(new THREE.CircleGeometry(1,24),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.35}));
+  shadow.rotation.x=-Math.PI/2;shadow.position.y=.01;scene.add(shadow);
+  bagG=new THREE.Group();bagG.position.copy(PIV);scene.add(bagG);
+  const chain=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,L-1.2,6),mat(0x999999));chain.position.y=-(L-1.2)/2;bagG.add(chain);
+  bagM=new THREE.Mesh(new THREE.CylinderGeometry(.8,.8,2.4,24),mat(0xb91c1c,{roughness:.45}));bagM.position.y=-L;bagG.add(bagM);
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(.81,.81,.25,24),mat(0xfacc15));band.position.y=-L+.5;bagG.add(band);
+  upper=new THREE.Mesh(new THREE.CylinderGeometry(.3,.26,1,12),mat(0xe0ac8a));
+  fore=new THREE.Mesh(new THREE.CylinderGeometry(.26,.24,1,12),mat(0xe0ac8a));
+  elbowM=new THREE.Mesh(new THREE.SphereGeometry(.28,12,10),mat(0xe0ac8a));
+  glove=new THREE.Mesh(new THREE.SphereGeometry(.42,16,12),mat(0xef4444,{roughness:.35}));glove.scale.set(1,1,1.15);
+  scene.add(upper,fore,elbowM,glove);
   addEventListener('resize',rs);rs();
 }
-function rs(){if(!renderer)return;const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);
-  camera.aspect=w/h;camera.fov=w<h?78:60;camera.updateProjectionMatrix()}
-function buildLevel(i){
-  for(const o of [...stage.children])if(o!==ball)stage.remove(o);
-  const L=LEVELS[i];plats=L.plats;bananas=[];goalPos=L.goal;
-  for(const [cx,cz,w,d] of L.plats){
-    const t=tex.clone();t.needsUpdate=true;t.repeat.set(w/2,d/2);
-    const side=new THREE.MeshStandardMaterial({color:0x92400e});
-    const m=new THREE.Mesh(new THREE.BoxGeometry(w,.6,d),[side,side,new THREE.MeshStandardMaterial({map:t}),side,side,side]);
-    m.position.set(cx,-.3,cz);m.receiveShadow=true;m.castShadow=true;stage.add(m)}
-  const gm=new THREE.MeshStandardMaterial({color:0x22c55e,emissive:0x16a34a,emissiveIntensity:.6});
-  const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,.1,24),gm);pad.position.set(L.goal[0],.05,L.goal[1]);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(1.3,.15,8,28),gm);ring.position.set(L.goal[0],1.6,L.goal[1]);ring.name='ring';
-  stage.add(pad,ring);
-  const bm=new THREE.MeshStandardMaterial({color:0xfacc15,emissive:0x854d0e,emissiveIntensity:.4});
-  for(const [x,z] of L.ban){const b=new THREE.Mesh(new THREE.TorusGeometry(.32,.12,8,14,Math.PI*1.3),bm);
-    b.position.set(x,1.1,z);b.castShadow=true;stage.add(b);bananas.push(b)}
-  respawn();tleft=L.t;
-}
-function respawn(){const s=LEVELS[level].start;bv={x:s[0],z:s[1],y:R,vy:0,vx:0,vz:0};ts={x:0,y:0}}
-function flash(m){$('msg').textContent=m;msgT=1.6}
-function onPlat(x,z){for(const [cx,cz,w,d] of plats)if(Math.abs(x-cx)<=w/2&&Math.abs(z-cz)<=d/2)return true;return false}
-addEventListener('keydown',e=>keys[e.key.toLowerCase()]=1);
-addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
-$('c').addEventListener('pointerdown',e=>drag={x:e.clientX,y:e.clientY,cx:e.clientX,cy:e.clientY});
-addEventListener('pointermove',e=>{if(drag){drag.cx=e.clientX;drag.cy=e.clientY}});
-addEventListener('pointerup',()=>drag=null);
-function input(){
-  if(mode==='screen'&&rt&&performance.now()-rt.t<1000)return{x:clamp(rt.x),y:clamp(rt.y)};
-  if(mode==='local'&&lt)return lt;
-  let ax=0,ay=0;
-  if(keys.arrowleft||keys.a)ax-=1;if(keys.arrowright||keys.d)ax+=1;
-  if(keys.arrowup||keys.w)ay-=1;if(keys.arrowdown||keys.s)ay+=1;
-  if(drag){ax=clamp((drag.cx-drag.x)/70);ay=clamp((drag.cy-drag.y)/70)}
-  return{x:ax,y:ay};
-}
-function loseLife(why){
-  lives--;ping('h');if(mode==='local'&&navigator.vibrate)navigator.vibrate(200);
-  if(lives<=0)return over();
-  flash(why==='time'?"Time's up!":'Oops!');tleft=LEVELS[level].t;respawn();
-}
-function step(dt){
-  const t=input(),G=10;ts.x+=(t.x-ts.x)*Math.min(1,dt*10);ts.y+=(t.y-ts.y)*Math.min(1,dt*10);
-  const grounded=bv.y<=R+.05&&bv.y>=R-.3&&onPlat(bv.x,bv.z);
-  if(grounded){bv.y=R;bv.vy=0;bv.vx+=ts.x*G*dt;bv.vz+=ts.y*G*dt;bv.vx*=1-.15*dt;bv.vz*=1-.15*dt}
-  else bv.vy-=26*dt;
-  bv.x+=bv.vx*dt;bv.z+=bv.vz*dt;bv.y+=bv.vy*dt;
-  if(bv.y<-12)return loseLife('fall');
-  tleft-=dt;if(tleft<=0)return loseLife('time');
-  for(let i=bananas.length-1;i>=0;i--){const b=bananas[i];
-    if(Math.hypot(b.position.x-bv.x,b.position.z-bv.z)<.9&&Math.abs(bv.y-1)<1){stage.remove(b);bananas.splice(i,1);score++;ping('o');if(mode==='local'&&navigator.vibrate)navigator.vibrate(20)}}
-  if(grounded&&Math.hypot(goalPos[0]-bv.x,goalPos[1]-bv.z)<1.2){
-    score+=Math.ceil(tleft/10);level++;
-    if(level>=LEVELS.length)return win();
-    flash('Level '+(level+1));buildLevel(level);
-  }
-}
-function render(dt){
-  if(!renderer)return;
-  ball.position.set(bv.x,bv.y,bv.z);
-  ball.rotation.x+=bv.vz*dt/R;ball.rotation.z-=bv.vx*dt/R;
-  stage.rotation.set(ts.y*.32,0,-ts.x*.32);
-  const v=ball.position.clone().applyEuler(stage.rotation);stage.position.copy(ball.position).sub(v);
-  const tgt=new THREE.Vector3(bv.x,bv.y,bv.z);
-  camera.position.lerp(new THREE.Vector3(bv.x,bv.y+8,bv.z+10),1-Math.pow(.002,dt));
-  camera.lookAt(bv.x,0,bv.z-2);
-  sun.position.set(bv.x+8,20,bv.z+6);sun.target.position.copy(tgt);
-  const tm=performance.now()/1000;
-  for(const b of bananas)b.rotation.y=tm*2;
-  const ring=stage.getObjectByName('ring');if(ring)ring.rotation.y=tm;
-  renderer.render(scene,camera);
-  $('sc').textContent='🍌 '+score+'  ·  Best '+best;$('tm').textContent=Math.max(0,Math.ceil(tleft))+'s';
-  $('lv').textContent='L'+(level+1)+' '+'♥'.repeat(Math.max(lives,0));
+function rs(){if(!renderer)return;const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w<h?80:58;camera.updateProjectionMatrix()}
+const limb=(m,a,b)=>{const v=b.clone().sub(a);m.position.copy(a).addScaledVector(v,.5);m.quaternion.setFromUnitVectors(Y,v.clone().normalize());m.scale.set(1,v.length(),1)};
+function fire(p){if(run)extv+=18*clamp(p,.2,1)}
+$('c').addEventListener('pointerdown',()=>{charge=performance.now()});
+addEventListener('pointerup',()=>{if(charge&&!track.have){fire(.35+Math.min(1,(performance.now()-charge)/900)*.65)}charge=0});
+addEventListener('pointermove',e=>{if(!track.have&&mode==='local'){aimL.x=(e.clientX/innerWidth-.5)*2;aimL.y=-(e.clientY/innerHeight-.5)*2}});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();fire(.85)}});
+function flash(m){$('msg').textContent=m;msgT=.9}
+function step(dt){tleft-=dt;if(tleft<=0)end()}
+function frame(dt){
+  const tracking=track.have&&performance.now()-track.t<1500;
+  const base=new THREE.Vector3(0,2.8,0).sub(S).normalize();
+  let dir;
+  if(tracking)dir=base.clone().applyQuaternion(track.q);
+  else{aim.x+=(aimL.x-aim.x)*Math.min(1,dt*18);aim.y+=(aimL.y-aim.y)*Math.min(1,dt*18);
+    dir=new THREE.Vector3(aim.x*2.2,2.8+aim.y*1.5,0).sub(S).normalize()}
+  for(let i=0;i<4;i++){const h=dt/4;
+    wx+=(-(25/L)*Math.sin(ax)-.5*wx)*h;wz+=(-(25/L)*Math.sin(az)-.5*wz)*h;ax+=wx*h;az+=wz*h}
+  bagG.rotation.set(ax,0,az);bagG.updateMatrixWorld(true);
+  const bc=new THREE.Vector3();bagM.getWorldPosition(bc);
+  shadow.position.x=bc.x;shadow.position.z=bc.z;
+  /* live thrust: phone forward acceleration drives a spring-mounted fist */
+  const acc=(tracking?3*track.a:0)-60*ext-14*extv;
+  extv+=acc*dt;ext+=extv*dt;
+  if(ext>1.05){ext=1.05;extv=Math.min(extv,0)}if(ext<-.35){ext=-.35;extv=Math.max(extv,0)}
+  const d=clamp(2.5+ext*1.45,1.8,3.95),fist=S.clone().addScaledVector(dir,d);
+  const down=new THREE.Vector3(0,-1,0),perp=down.sub(dir.clone().multiplyScalar(down.dot(dir))).normalize();
+  const elbow=S.clone().addScaledVector(dir,d/2).addScaledVector(perp,Math.sqrt(Math.max(.01,4-d*d/4)));
+  limb(upper,S,elbow);limb(fore,elbow,fist);elbowM.position.copy(elbow);glove.position.copy(fist);
+  glove.lookAt(fist.clone().add(dir));
+  /* hit: fist speed decides power */
+  const vel=prevFist&&dt>0?fist.clone().sub(prevFist).divideScalar(dt):new THREE.Vector3();prevFist=fist.clone();
+  const speed=vel.length(),n=performance.now();
+  if(run&&speed>1.5&&n-lastHitT>250&&fist.distanceTo(bc)<1.2){
+    const p=clamp(speed/9,.15,1),vn=vel.clone().normalize(),dist=fist.distanceTo(bc);
+    lastHitT=n;combo=(n-lastHit<1000)?combo+1:1;lastHit=n;
+    const pts=Math.round(p*100*(dist<.7?1.25:1)*(1+.1*(combo-1)));
+    score+=pts;wx+=3.5*p*(-vn.z);wz+=3.5*p*vn.x;shake=.25*p+.05;
+    flash((dist<.7?'💥 ':'')+pts+(combo>1?'  x'+combo:''));
+    ping({h:p});if(mode==='local'&&navigator.vibrate)navigator.vibrate(30+p*150)}
+  shake*=Math.pow(.01,dt);
+  camera.position.set(1.2+(Math.random()-.5)*shake,3.2+(Math.random()-.5)*shake,7.5);
+  camera.lookAt(0,2.2,0);renderer.render(scene,camera);
+  $('sc').textContent='Score '+score;$('tm').textContent=Math.max(0,Math.ceil(tleft))+'s';$('bs').textContent='Best '+best;
   if(msgT>0){msgT-=dt;if(msgT<=0)$('msg').textContent=''}
 }
-function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;if(run)step(dt);render(dt);requestAnimationFrame(loop)}
-function initGame(){init3d();level=0;score=0;lives=3;buildLevel(0);camera.position.set(bv.x,bv.y+8,bv.z+10);
+function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;if(run)step(dt);frame(dt);requestAnimationFrame(loop)}
+function initGame(){if(typeof THREE==='undefined'){$('serr').textContent='Could not load the 3D library (needs internet).';return}
+  init3d();score=0;tleft=30;combo=0;wx=wz=ax=az=ext=extv=0;
   if(!looping){looping=true;requestAnimationFrame(loop)}}
-function end(title){run=false;
-  if(score>best){best=score;try{localStorage.setItem('tiltball-best',best)}catch(e){}}
-  $('t').textContent=title;$('go').textContent='Play again';$('ov').classList.add('on')}
-function over(){end('Game over — '+score+' pts')}
-function win(){level=LEVELS.length-1;end('You win! '+score+' pts')}
-$('go').onclick=()=>{if(run===false&&($('go').textContent==='Play again')){initGame()}else{lbase=null}
-  $('ov').classList.remove('on');run=true;lbase=null};
+function end(){run=false;
+  if(score>best){best=score;try{localStorage.setItem('punchbag-best',best)}catch(e){}}
+  $('t').textContent='Time! Score '+score;$('go').textContent='Play again';$('ov').classList.add('on')}
+$('go').onclick=()=>{if($('go').textContent==='Play again')initGame();if(localSens)localSens.recenter();$('ov').classList.remove('on');run=true};
 </script></body></html>
