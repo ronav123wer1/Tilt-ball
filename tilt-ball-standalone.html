@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tilt Ball</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#1c1b19;--ball:#2563eb;--orb:#d97706;--bad:#dc2626;--card:#fffdf8}
+@media (prefers-color-scheme:dark){:root{--bg:#14151a;--fg:#eceae4;--ball:#60a5fa;--orb:#fbbf24;--bad:#f87171;--card:#1e2028}}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
+.view{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow:auto}
+.view.on{display:flex}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+.card{background:var(--card);border-radius:20px;padding:22px 20px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.15);max-height:100%;overflow:auto;box-sizing:border-box}
+h1{margin:0 0 8px;font-size:26px}p{margin:6px 0;line-height:1.4;opacity:.85;font-size:14px}
+button{margin:6px 3px 0;font-size:16px;font-weight:700;padding:12px 22px;border:0;border-radius:999px;background:var(--ball);color:#fff;cursor:pointer}
+button.alt{background:transparent;color:var(--fg);border:2px solid var(--fg)}
+textarea{width:100%;box-sizing:border-box;height:70px;font:11px monospace;border-radius:10px;border:2px solid var(--fg);background:var(--bg);color:var(--fg);padding:6px;user-select:text;-webkit-user-select:text}
+#hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 18px;font-weight:700;font-size:18px;pointer-events:none}
+#ov{background:color-mix(in srgb,var(--bg) 82%,transparent)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.ok{background:#16a34a}
+#bubble{width:120px;height:120px;border-radius:50%;border:3px solid var(--fg);margin:14px auto;position:relative}
+#bubble i{position:absolute;width:26px;height:26px;border-radius:50%;background:var(--ball);left:47px;top:47px}
+.err{color:var(--bad);font-size:13px}
+</style></head><body>
+
+<div class="view on" id="menu"><div class="card"><h1>Tilt Ball</h1>
+<p>Roll the ball with your phone's tilt. No account or server needed.</p>
+<button id="bLocal">Play on this device</button><br>
+<button class="alt" id="bScreen">I'm the screen</button>
+<button class="alt" id="bPad">I'm the controller</button>
+<p style="font-size:12px;margin-top:12px">Phone-as-controller: open this file on both devices and swap two short codes (copy/paste) once to pair.</p></div></div>
+
+<div class="view" id="screen"><canvas id="c"></canvas>
+<div id="hud"><span id="sc"></span><span id="lv"></span></div>
+<div class="view on" id="ov"><div class="card"><h1 id="t">Ready</h1>
+<div id="pair" style="display:none">
+<p><b>1.</b> Copy this code to your phone's controller page:</p>
+<textarea id="offer" readonly placeholder="Generating…"></textarea><button class="alt" id="cpO">Copy</button>
+<p><b>2.</b> Paste the phone's reply here:</p>
+<textarea id="answer" placeholder="Paste reply code"></textarea><button id="cn">Connect</button>
+<p id="st"><span class="dot" id="dot"></span><span id="stt">Not connected</span></p></div>
+<button id="go">Start</button>
+<p style="font-size:12px">Arrow keys / WASD / mouse also work.</p><p class="err" id="serr"></p>
+<button class="alt" id="back">Back</button></div></div></div>
+
+<div class="view" id="pad"><div class="card"><h1>Controller</h1>
+<div id="s1"><p><b>1.</b> Paste the code from the screen:</p>
+<textarea id="poffer" placeholder="Paste screen code"></textarea><button id="mk">Create reply</button></div>
+<div id="s2" style="display:none"><p><b>2.</b> Copy this reply to the screen:</p>
+<textarea id="pans" readonly></textarea><button class="alt" id="cpA">Copy</button></div>
+<div id="live" style="display:none"><p><span class="dot ok"></span>Connected — tilt to play</p>
+<div id="bubble"><i id="bi"></i></div><button id="rc">Recenter</button></div>
+<p class="err" id="perr"></p><button class="alt" id="pback">Back</button></div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const clamp=v=>Math.max(-1,Math.min(1,v));
+const show=v=>{for(const e of document.body.children)if(e.classList.contains('view'))e.classList.remove('on');$(v).classList.add('on')};
+const CFG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+const enc=d=>btoa(JSON.stringify(d)),dec=s=>JSON.parse(atob(s.replace(/\s+/g,'')));
+function gathered(pc){return new Promise(r=>{if(pc.iceGatheringState==='complete')return r();
+  pc.addEventListener('icegatheringstatechange',()=>pc.iceGatheringState==='complete'&&r());setTimeout(r,3500)})}
+function copy(el,btn){el.select();try{navigator.clipboard.writeText(el.value).catch(()=>document.execCommand('copy'))}catch(e){document.execCommand('copy')}
+  const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1200)}
+async function needMotion(){
+  if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission){
+    const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw new Error('Motion access denied.')}}
+
+/* ---------- menu ---------- */
+let mode='local',dc=null,pc=null;
+$('bLocal').onclick=async()=>{mode='local';show('screen');$('pair').style.display='none';
+  try{await needMotion();addEventListener('deviceorientation',localTilt)}catch(e){$('serr').textContent=e.message+' Using touch/keys.'}
+  initGame()};
+$('bScreen').onclick=()=>{mode='screen';show('screen');$('pair').style.display='block';initGame();makeOffer()};
+$('bPad').onclick=()=>show('pad');
+$('back').onclick=()=>location.reload();$('pback').onclick=()=>location.reload();
+
+/* ---------- screen pairing ---------- */
+let rt=null;
+async function makeOffer(){
+  try{
+    pc=new RTCPeerConnection(CFG);
+    dc=pc.createDataChannel('t',{ordered:false,maxRetransmits:0});
+    dc.onopen=()=>{$('dot').className='dot ok';$('stt').textContent='Phone connected!'};
+    dc.onclose=()=>{$('dot').className='dot';$('stt').textContent='Disconnected';rt=null};
+    dc.onmessage=e=>{try{rt=JSON.parse(e.data);rt.t=performance.now()}catch(x){}};
+    await pc.setLocalDescription(await pc.createOffer());await gathered(pc);
+    $('offer').value=enc(pc.localDescription);
+  }catch(e){$('serr').textContent='WebRTC unavailable: '+e.message}
+}
+$('cpO').onclick=()=>copy($('offer'),$('cpO'));
+$('cn').onclick=async()=>{$('serr').textContent='';
+  try{await pc.setRemoteDescription(dec($('answer').value.trim()))}catch(e){$('serr').textContent='That reply code did not work.'}};
+const ping=m=>{try{if(dc&&dc.readyState==='open')dc.send(m)}catch(e){}};
+
+/* ---------- controller ---------- */
+let base=null,lastSend=0,pdc=null;
+$('mk').onclick=async()=>{$('perr').textContent='';
+  let offer;try{offer=dec($('poffer').value.trim())}catch(e){$('perr').textContent='Invalid screen code.';return}
+  try{await needMotion()}catch(e){$('perr').textContent=e.message;return}
+  try{
+    const p=new RTCPeerConnection(CFG);
+    p.ondatachannel=ev=>{pdc=ev.channel;
+      pdc.onopen=()=>{$('s1').style.display=$('s2').style.display='none';$('live').style.display='block';addEventListener('deviceorientation',padTilt)};
+      pdc.onmessage=m=>{if(navigator.vibrate)navigator.vibrate(m.data==='h'?200:25)};
+      pdc.onclose=()=>{$('perr').textContent='Disconnected.'}};
+    await p.setRemoteDescription(offer);await p.setLocalDescription(await p.createAnswer());await gathered(p);
+    $('pans').value=enc(p.localDescription);$('s2').style.display='block';
+  }catch(e){$('perr').textContent='Pairing failed: '+e.message}};
+$('cpA').onclick=()=>copy($('pans'),$('cpA'));
+$('rc').onclick=()=>base=null;
+function padTilt(e){
+  if(e.gamma==null)return;if(!base)base={b:e.beta,g:e.gamma};
+  const tx=clamp((e.gamma-base.g)/30),ty=clamp((e.beta-base.b)/30);
+  $('bi').style.left=(47+tx*40)+'px';$('bi').style.top=(47+ty*40)+'px';
+  const n=performance.now();if(n-lastSend<30||!pdc||pdc.readyState!=='open')return;lastSend=n;
+  pdc.send(JSON.stringify({x:+tx.toFixed(3),y:+ty.toFixed(3)}));
+}
+
+/* ---------- local tilt ---------- */
+let lt=null,lbase=null;
+function localTilt(e){if(e.gamma==null)return;if(!lbase)lbase={b:e.beta,g:e.gamma};
+  lt={x:clamp((e.gamma-lbase.g)/30),y:clamp((e.beta-lbase.b)/30)}}
+
+/* ---------- game ---------- */
+const c=$('c'),x=c.getContext('2d');let W,H;
+function rs(){const d=devicePixelRatio||1;W=innerWidth;H=innerHeight;c.width=W*d;c.height=H*d;x.setTransform(d,0,0,d,0,0)}
+addEventListener('resize',rs);rs();
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let ball,orbs,haz,score,lives,inv,run=false,keys={},ptr=null,best=0,looping=false,last=0;
+try{best=+localStorage.getItem('tiltball-best')||0}catch(e){}
+const R=14,rnd=(a,b)=>a+Math.random()*(b-a);
+const newOrb=()=>({x:rnd(40,W-40),y:rnd(110,H-50),r:10});
+function addHaz(){const a=rnd(0,6.28),s=rnd(70,130);haz.push({x:rnd(40,W-40),y:rnd(120,H-60),vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:rnd(14,22)})}
+function reset(){ball={x:W/2,y:H/2,vx:0,vy:0};orbs=[newOrb()];haz=[];addHaz();score=0;lives=3;inv=1.5;lbase=null}
+addEventListener('keydown',e=>keys[e.key.toLowerCase()]=1);
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+c.addEventListener('pointerdown',e=>ptr={x:e.clientX,y:e.clientY});
+addEventListener('pointermove',e=>{if(ptr)ptr={x:e.clientX,y:e.clientY}});
+addEventListener('pointerup',()=>ptr=null);
+function input(){
+  if(mode==='screen'&&rt&&performance.now()-rt.t<1000)return{x:clamp(rt.x),y:clamp(rt.y)};
+  if(mode==='local'&&lt)return lt;
+  let ax=0,ay=0;
+  if(keys.arrowleft||keys.a)ax-=1;if(keys.arrowright||keys.d)ax+=1;
+  if(keys.arrowup||keys.w)ay-=1;if(keys.arrowdown||keys.s)ay+=1;
+  if(ptr){const dx=ptr.x-ball.x,dy=ptr.y-ball.y,m=Math.hypot(dx,dy)||1;ax=dx/m;ay=dy/m}
+  return{x:ax,y:ay};
+}
+function step(dt){
+  const t=input();
+  ball.vx+=t.x*1400*dt;ball.vy+=t.y*1400*dt;
+  ball.vx*=Math.pow(.25,dt);ball.vy*=Math.pow(.25,dt);
+  ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+  const top=70;
+  if(ball.x<R){ball.x=R;ball.vx*=-.5}if(ball.x>W-R){ball.x=W-R;ball.vx*=-.5}
+  if(ball.y<top){ball.y=top;ball.vy*=-.5}if(ball.y>H-R){ball.y=H-R;ball.vy*=-.5}
+  inv=Math.max(0,inv-dt);
+  for(const h of haz){
+    h.x+=h.vx*dt;h.y+=h.vy*dt;
+    if(h.x<h.r||h.x>W-h.r)h.vx*=-1;if(h.y<top+h.r||h.y>H-h.r)h.vy*=-1;
+    h.x=Math.max(h.r,Math.min(W-h.r,h.x));h.y=Math.max(top+h.r,Math.min(H-h.r,h.y));
+    if(!inv&&Math.hypot(h.x-ball.x,h.y-ball.y)<h.r+R){
+      lives--;inv=1.5;ball.vx=ball.vy=0;ping('h');if(mode==='local'&&navigator.vibrate)navigator.vibrate(150);
+      if(lives<=0)return over();
+    }
+  }
+  for(let i=0;i<orbs.length;i++){const o=orbs[i];
+    if(Math.hypot(o.x-ball.x,o.y-ball.y)<o.r+R){score++;orbs[i]=newOrb();if(score%4===0)addHaz();ping('o');if(mode==='local'&&navigator.vibrate)navigator.vibrate(20)}}
+}
+function draw(){
+  x.clearRect(0,0,W,H);
+  for(const o of orbs){x.fillStyle=css('--orb');x.beginPath();x.arc(o.x,o.y,o.r,0,7);x.fill()}
+  for(const h of haz){x.fillStyle=css('--bad');x.beginPath();x.arc(h.x,h.y,h.r,0,7);x.fill()}
+  x.globalAlpha=inv&&Math.floor(inv*10)%2?.4:1;
+  x.fillStyle=css('--ball');x.beginPath();x.arc(ball.x,ball.y,R,0,7);x.fill();
+  x.fillStyle='rgba(255,255,255,.5)';x.beginPath();x.arc(ball.x-4,ball.y-4,4,0,7);x.fill();x.globalAlpha=1;
+  $('sc').textContent='Orbs '+score+'  ·  Best '+best;$('lv').textContent='♥'.repeat(Math.max(lives,0));
+}
+function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;if(run)step(dt);if(ball)draw();requestAnimationFrame(loop)}
+function initGame(){reset();if(!looping){looping=true;requestAnimationFrame(loop)}}
+function over(){run=false;
+  if(score>best){best=score;try{localStorage.setItem('tiltball-best',best)}catch(e){}}
+  $('t').textContent='Game over — '+score+' orbs';$('go').textContent='Play again';$('ov').classList.add('on')}
+$('go').onclick=()=>{reset();$('ov').classList.remove('on');run=true};
+</script></body></html>
