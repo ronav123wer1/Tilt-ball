@@ -2,6 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tilt Ball</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{--bg:#f4f1ea;--fg:#1c1b19;--ball:#2563eb;--orb:#d97706;--bad:#dc2626;--card:#fffdf8}
 @media (prefers-color-scheme:dark){:root{--bg:#14151a;--fg:#eceae4;--ball:#60a5fa;--orb:#fbbf24;--bad:#f87171;--card:#1e2028}}
@@ -19,6 +20,8 @@ textarea{width:100%;box-sizing:border-box;height:70px;font:11px monospace;border
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.ok{background:#16a34a}
 #bubble{width:120px;height:120px;border-radius:50%;border:3px solid var(--fg);margin:14px auto;position:relative}
 #bubble i{position:absolute;width:26px;height:26px;border-radius:50%;background:var(--ball);left:47px;top:47px}
+.code{font-size:56px;font-weight:800;letter-spacing:.15em;color:var(--ball);margin:6px 0}
+input{font-size:30px;letter-spacing:.3em;text-align:center;width:5ch;padding:10px;border-radius:12px;border:2px solid var(--fg);background:var(--bg);color:var(--fg)}
 .err{color:var(--bad);font-size:13px}
 </style></head><body>
 
@@ -27,26 +30,22 @@ textarea{width:100%;box-sizing:border-box;height:70px;font:11px monospace;border
 <button id="bLocal">Play on this device</button><br>
 <button class="alt" id="bScreen">I'm the screen</button>
 <button class="alt" id="bPad">I'm the controller</button>
-<p style="font-size:12px;margin-top:12px">Phone-as-controller: open this file on both devices and swap two short codes (copy/paste) once to pair.</p></div></div>
+<p style="font-size:12px;margin-top:12px">Phone-as-controller: open this page on both devices, then type a 4-digit code on the phone (needs internet).</p></div></div>
 
 <div class="view" id="screen"><canvas id="c"></canvas>
 <div id="hud"><span id="sc"></span><span id="lv"></span></div>
 <div class="view on" id="ov"><div class="card"><h1 id="t">Ready</h1>
 <div id="pair" style="display:none">
-<p><b>1.</b> Copy this code to your phone's controller page:</p>
-<textarea id="offer" readonly placeholder="Generating…"></textarea><button class="alt" id="cpO">Copy</button>
-<p><b>2.</b> Paste the phone's reply here:</p>
-<textarea id="answer" placeholder="Paste reply code"></textarea><button id="cn">Connect</button>
-<p id="st"><span class="dot" id="dot"></span><span id="stt">Not connected</span></p></div>
+<p>On your phone, open this page, tap <b>I'm the controller</b>, and enter:</p>
+<div class="code" id="code">····</div>
+<p id="st"><span class="dot" id="dot"></span><span id="stt">Waiting for phone…</span></p></div>
 <button id="go">Start</button>
 <p style="font-size:12px">Arrow keys / WASD / mouse also work.</p><p class="err" id="serr"></p>
 <button class="alt" id="back">Back</button></div></div></div>
 
 <div class="view" id="pad"><div class="card"><h1>Controller</h1>
-<div id="s1"><p><b>1.</b> Paste the code from the screen:</p>
-<textarea id="poffer" placeholder="Paste screen code"></textarea><button id="mk">Create reply</button></div>
-<div id="s2" style="display:none"><p><b>2.</b> Copy this reply to the screen:</p>
-<textarea id="pans" readonly></textarea><button class="alt" id="cpA">Copy</button></div>
+<div id="s1"><p>Enter the 4-digit code shown on the screen:</p>
+<input id="ci" inputmode="numeric" maxlength="4" autocomplete="off"><br><button id="mk">Connect</button></div>
 <div id="live" style="display:none"><p><span class="dot ok"></span>Connected — tilt to play</p>
 <div id="bubble"><i id="bi"></i></div><button id="rc">Recenter</button></div>
 <p class="err" id="perr"></p><button class="alt" id="pback">Back</button></div></div>
@@ -56,11 +55,6 @@ const $=id=>document.getElementById(id);
 const clamp=v=>Math.max(-1,Math.min(1,v));
 const show=v=>{for(const e of document.body.children)if(e.classList.contains('view'))e.classList.remove('on');$(v).classList.add('on')};
 const CFG={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
-const enc=d=>btoa(JSON.stringify(d)),dec=s=>JSON.parse(atob(s.replace(/\s+/g,'')));
-function gathered(pc){return new Promise(r=>{if(pc.iceGatheringState==='complete')return r();
-  pc.addEventListener('icegatheringstatechange',()=>pc.iceGatheringState==='complete'&&r());setTimeout(r,3500)})}
-function copy(el,btn){el.select();try{navigator.clipboard.writeText(el.value).catch(()=>document.execCommand('copy'))}catch(e){document.execCommand('copy')}
-  const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1200)}
 async function needMotion(){
   if(typeof DeviceOrientationEvent!=='undefined'&&DeviceOrientationEvent.requestPermission){
     const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted')throw new Error('Motion access denied.')}}
@@ -70,50 +64,46 @@ let mode='local',dc=null,pc=null;
 $('bLocal').onclick=async()=>{mode='local';show('screen');$('pair').style.display='none';
   try{await needMotion();addEventListener('deviceorientation',localTilt)}catch(e){$('serr').textContent=e.message+' Using touch/keys.'}
   initGame()};
-$('bScreen').onclick=()=>{mode='screen';show('screen');$('pair').style.display='block';initGame();makeOffer()};
+$('bScreen').onclick=()=>{mode='screen';show('screen');$('pair').style.display='block';initGame();makePeer()};
 $('bPad').onclick=()=>show('pad');
 $('back').onclick=()=>location.reload();$('pback').onclick=()=>location.reload();
 
 /* ---------- screen pairing ---------- */
-let rt=null;
-async function makeOffer(){
-  try{
-    pc=new RTCPeerConnection(CFG);
-    dc=pc.createDataChannel('t',{ordered:false,maxRetransmits:0});
-    dc.onopen=()=>{$('dot').className='dot ok';$('stt').textContent='Phone connected!'};
-    dc.onclose=()=>{$('dot').className='dot';$('stt').textContent='Disconnected';rt=null};
-    dc.onmessage=e=>{try{rt=JSON.parse(e.data);rt.t=performance.now()}catch(x){}};
-    await pc.setLocalDescription(await pc.createOffer());await gathered(pc);
-    $('offer').value=enc(pc.localDescription);
-  }catch(e){$('serr').textContent='WebRTC unavailable: '+e.message}
+let rt=null,peer=null;
+function makePeer(){
+  if(typeof Peer==='undefined'){$('serr').textContent='Pairing needs internet (could not load PeerJS).';return}
+  const code=String(Math.floor(Math.random()*10000)).padStart(4,'0');
+  peer=new Peer('tiltball-'+code);
+  peer.on('open',()=>{$('code').textContent=code});
+  peer.on('error',e=>{if(e.type==='unavailable-id'){peer.destroy();makePeer()}else $('serr').textContent='Pairing error: '+e.type});
+  peer.on('connection',conn=>{dc=conn;
+    conn.on('open',()=>{$('dot').className='dot ok';$('stt').textContent='Phone connected!'});
+    conn.on('data',d=>{if(d&&typeof d==='object'){rt=d;rt.t=performance.now()}});
+    conn.on('close',()=>{$('dot').className='dot';$('stt').textContent='Disconnected';rt=null})});
 }
-$('cpO').onclick=()=>copy($('offer'),$('cpO'));
-$('cn').onclick=async()=>{$('serr').textContent='';
-  try{await pc.setRemoteDescription(dec($('answer').value.trim()))}catch(e){$('serr').textContent='That reply code did not work.'}};
-const ping=m=>{try{if(dc&&dc.readyState==='open')dc.send(m)}catch(e){}};
+const ping=m=>{try{if(dc&&dc.open)dc.send(m)}catch(e){}};
 
 /* ---------- controller ---------- */
 let base=null,lastSend=0,pdc=null;
 $('mk').onclick=async()=>{$('perr').textContent='';
-  let offer;try{offer=dec($('poffer').value.trim())}catch(e){$('perr').textContent='Invalid screen code.';return}
+  const code=$('ci').value.trim();
+  if(!/^\d{4}$/.test(code)){$('perr').textContent='Enter the 4-digit code.';return}
+  if(typeof Peer==='undefined'){$('perr').textContent='Pairing needs internet (could not load PeerJS).';return}
   try{await needMotion()}catch(e){$('perr').textContent=e.message;return}
-  try{
-    const p=new RTCPeerConnection(CFG);
-    p.ondatachannel=ev=>{pdc=ev.channel;
-      pdc.onopen=()=>{$('s1').style.display=$('s2').style.display='none';$('live').style.display='block';addEventListener('deviceorientation',padTilt)};
-      pdc.onmessage=m=>{if(navigator.vibrate)navigator.vibrate(m.data==='h'?200:25)};
-      pdc.onclose=()=>{$('perr').textContent='Disconnected.'}};
-    await p.setRemoteDescription(offer);await p.setLocalDescription(await p.createAnswer());await gathered(p);
-    $('pans').value=enc(p.localDescription);$('s2').style.display='block';
-  }catch(e){$('perr').textContent='Pairing failed: '+e.message}};
-$('cpA').onclick=()=>copy($('pans'),$('cpA'));
+  const p=new Peer();
+  p.on('open',()=>{pdc=p.connect('tiltball-'+code,{serialization:'json'});
+    pdc.on('open',()=>{$('s1').style.display='none';$('live').style.display='block';addEventListener('deviceorientation',padTilt)});
+    pdc.on('data',m=>{if(navigator.vibrate)navigator.vibrate(m==='h'?200:25)});
+    pdc.on('close',()=>{$('perr').textContent='Disconnected.'})});
+  p.on('error',e=>{$('perr').textContent=e.type==='peer-unavailable'?'No screen found with that code.':'Pairing error: '+e.type});
+};
 $('rc').onclick=()=>base=null;
 function padTilt(e){
   if(e.gamma==null)return;if(!base)base={b:e.beta,g:e.gamma};
   const tx=clamp((e.gamma-base.g)/30),ty=clamp((e.beta-base.b)/30);
   $('bi').style.left=(47+tx*40)+'px';$('bi').style.top=(47+ty*40)+'px';
-  const n=performance.now();if(n-lastSend<30||!pdc||pdc.readyState!=='open')return;lastSend=n;
-  pdc.send(JSON.stringify({x:+tx.toFixed(3),y:+ty.toFixed(3)}));
+  const n=performance.now();if(n-lastSend<30||!pdc||!pdc.open)return;lastSend=n;
+  pdc.send({x:+tx.toFixed(3),y:+ty.toFixed(3)});
 }
 
 /* ---------- local tilt ---------- */
