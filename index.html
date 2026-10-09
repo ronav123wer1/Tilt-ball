@@ -2,11 +2,12 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tilt Ball</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 :root{--bg:#f4f1ea;--fg:#1c1b19;--ball:#2563eb;--orb:#d97706;--bad:#dc2626;--card:#fffdf8}
 @media (prefers-color-scheme:dark){:root{--bg:#14151a;--fg:#eceae4;--ball:#60a5fa;--orb:#fbbf24;--bad:#f87171;--card:#1e2028}}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
+html,body{height:100%;margin:0;background:linear-gradient(#6ec1f5,#dff3ff);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none}
 .view{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;overflow:auto}
 .view.on{display:flex}
 canvas{position:fixed;inset:0;width:100%;height:100%}
@@ -15,7 +16,8 @@ h1{margin:0 0 8px;font-size:26px}p{margin:6px 0;line-height:1.4;opacity:.85;font
 button{margin:6px 3px 0;font-size:16px;font-weight:700;padding:12px 22px;border:0;border-radius:999px;background:var(--ball);color:#fff;cursor:pointer}
 button.alt{background:transparent;color:var(--fg);border:2px solid var(--fg)}
 textarea{width:100%;box-sizing:border-box;height:70px;font:11px monospace;border-radius:10px;border:2px solid var(--fg);background:var(--bg);color:var(--fg);padding:6px;user-select:text;-webkit-user-select:text}
-#hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 18px;font-weight:700;font-size:18px;pointer-events:none}
+#msg{position:fixed;top:30%;left:0;right:0;text-align:center;font-size:34px;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:none}
+#hud{position:fixed;color:#10324a;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 18px;font-weight:700;font-size:18px;pointer-events:none}
 #ov{background:color-mix(in srgb,var(--bg) 82%,transparent)}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px}.dot.ok{background:#16a34a}
 #bubble{width:120px;height:120px;border-radius:50%;border:3px solid var(--fg);margin:14px auto;position:relative}
@@ -26,14 +28,14 @@ input{font-size:30px;letter-spacing:.3em;text-align:center;width:5ch;padding:10p
 </style></head><body>
 
 <div class="view on" id="menu"><div class="card"><h1>Tilt Ball</h1>
-<p>Roll the ball with your phone's tilt. No account or server needed.</p>
+<p>Tilt the stage to roll the ball to the goal, Super Monkey Ball style. No account or server needed.</p>
 <button id="bLocal">Play on this device</button><br>
 <button class="alt" id="bScreen">I'm the screen</button>
 <button class="alt" id="bPad">I'm the controller</button>
 <p style="font-size:12px;margin-top:12px">Phone-as-controller: open this page on both devices, then type a 4-digit code on the phone (needs internet).</p></div></div>
 
 <div class="view" id="screen"><canvas id="c"></canvas>
-<div id="hud"><span id="sc"></span><span id="lv"></span></div>
+<div id="hud"><span id="sc"></span><span id="tm"></span><span id="lv"></span></div><div id="msg"></div>
 <div class="view on" id="ov"><div class="card"><h1 id="t">Ready</h1>
 <div id="pair" style="display:none">
 <p>On your phone, open this page, tap <b>I'm the controller</b>, and enter:</p>
@@ -111,65 +113,119 @@ let lt=null,lbase=null;
 function localTilt(e){if(e.gamma==null)return;if(!lbase)lbase={b:e.beta,g:e.gamma};
   lt={x:clamp((e.gamma-lbase.g)/30),y:clamp((e.beta-lbase.b)/30)}}
 
-/* ---------- game ---------- */
-const c=$('c'),x=c.getContext('2d');let W,H;
-function rs(){const d=devicePixelRatio||1;W=innerWidth;H=innerHeight;c.width=W*d;c.height=H*d;x.setTransform(d,0,0,d,0,0)}
-addEventListener('resize',rs);rs();
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-let ball,orbs,haz,score,lives,inv,run=false,keys={},ptr=null,best=0,looping=false,last=0;
+/* ---------- game (3D) ---------- */
+const R=0.5;
+const LEVELS=[
+ {t:45,start:[0,12],goal:[0,-13],plats:[[0,0,6,30]],ban:[[0,8],[0,2],[0,-4],[0,-9]]},
+ {t:55,start:[0,12],goal:[12,-14],plats:[[0,8,6,14],[6,0,18,6],[12,-10,6,14]],ban:[[0,5],[3,0],[9,0],[12,-6],[12,-11]]},
+ {t:60,start:[0,11],goal:[13,-12],plats:[[0,10,8,8],[0,0,2.2,14],[0,-12,8,10],[7,-12,6,2.2],[13,-12,6,6]],ban:[[0,10],[0,2],[0,-3],[0,-12],[7,-12],[11,-12]]}
+];
+let renderer,scene,camera,stage,ball,sun,tex,btex,gl=null,level=0,tleft=0,score=0,lives=3,run=false,looping=false,last=0;
+let bv={x:0,z:0,y:R,vy:0},plats=[],bananas=[],goalPos=[0,0],ts={x:0,y:0},keys={},drag=null,best=0,msgT=0,inited=false;
 try{best=+localStorage.getItem('tiltball-best')||0}catch(e){}
-const R=14,rnd=(a,b)=>a+Math.random()*(b-a);
-const newOrb=()=>({x:rnd(40,W-40),y:rnd(110,H-50),r:10});
-function addHaz(){const a=rnd(0,6.28),s=rnd(70,130);haz.push({x:rnd(40,W-40),y:rnd(120,H-60),vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:rnd(14,22)})}
-function reset(){ball={x:W/2,y:H/2,vx:0,vy:0};orbs=[newOrb()];haz=[];addHaz();score=0;lives=3;inv=1.5;lbase=null}
+function checker(c1,c2){const cv=document.createElement('canvas');cv.width=cv.height=64;const g=cv.getContext('2d');
+  g.fillStyle=c1;g.fillRect(0,0,64,64);g.fillStyle=c2;g.fillRect(0,0,32,32);g.fillRect(32,32,32,32);
+  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t}
+function init3d(){
+  if(inited)return;inited=true;
+  renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true,alpha:true});
+  renderer.shadowMap.enabled=true;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(60,1,.1,200);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x6b8aa8,.75));
+  sun=new THREE.DirectionalLight(0xffffff,.8);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+  const sc=sun.shadow.camera;sc.left=sc.bottom=-14;sc.right=sc.top=14;sc.far=60;scene.add(sun,sun.target);
+  stage=new THREE.Group();scene.add(stage);
+  tex=checker('#f59e0b','#fde68a');
+  const bc=document.createElement('canvas');bc.width=bc.height=64;const g=bc.getContext('2d');
+  for(let i=0;i<8;i++){g.fillStyle=i%2?'#e0f2fe':'#2563eb';g.fillRect(i*8,0,8,64)}
+  btex=new THREE.CanvasTexture(bc);
+  ball=new THREE.Mesh(new THREE.SphereGeometry(R,24,18),new THREE.MeshStandardMaterial({map:btex,roughness:.4}));
+  ball.castShadow=true;stage.add(ball);
+  addEventListener('resize',rs);rs();
+}
+function rs(){if(!renderer)return;const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);
+  camera.aspect=w/h;camera.fov=w<h?78:60;camera.updateProjectionMatrix()}
+function buildLevel(i){
+  for(const o of [...stage.children])if(o!==ball)stage.remove(o);
+  const L=LEVELS[i];plats=L.plats;bananas=[];goalPos=L.goal;
+  for(const [cx,cz,w,d] of L.plats){
+    const t=tex.clone();t.needsUpdate=true;t.repeat.set(w/2,d/2);
+    const side=new THREE.MeshStandardMaterial({color:0x92400e});
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,.6,d),[side,side,new THREE.MeshStandardMaterial({map:t}),side,side,side]);
+    m.position.set(cx,-.3,cz);m.receiveShadow=true;m.castShadow=true;stage.add(m)}
+  const gm=new THREE.MeshStandardMaterial({color:0x22c55e,emissive:0x16a34a,emissiveIntensity:.6});
+  const pad=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,.1,24),gm);pad.position.set(L.goal[0],.05,L.goal[1]);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(1.3,.15,8,28),gm);ring.position.set(L.goal[0],1.6,L.goal[1]);ring.name='ring';
+  stage.add(pad,ring);
+  const bm=new THREE.MeshStandardMaterial({color:0xfacc15,emissive:0x854d0e,emissiveIntensity:.4});
+  for(const [x,z] of L.ban){const b=new THREE.Mesh(new THREE.TorusGeometry(.32,.12,8,14,Math.PI*1.3),bm);
+    b.position.set(x,1.1,z);b.castShadow=true;stage.add(b);bananas.push(b)}
+  respawn();tleft=L.t;
+}
+function respawn(){const s=LEVELS[level].start;bv={x:s[0],z:s[1],y:R,vy:0,vx:0,vz:0};ts={x:0,y:0}}
+function flash(m){$('msg').textContent=m;msgT=1.6}
+function onPlat(x,z){for(const [cx,cz,w,d] of plats)if(Math.abs(x-cx)<=w/2&&Math.abs(z-cz)<=d/2)return true;return false}
 addEventListener('keydown',e=>keys[e.key.toLowerCase()]=1);
 addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
-c.addEventListener('pointerdown',e=>ptr={x:e.clientX,y:e.clientY});
-addEventListener('pointermove',e=>{if(ptr)ptr={x:e.clientX,y:e.clientY}});
-addEventListener('pointerup',()=>ptr=null);
+$('c').addEventListener('pointerdown',e=>drag={x:e.clientX,y:e.clientY,cx:e.clientX,cy:e.clientY});
+addEventListener('pointermove',e=>{if(drag){drag.cx=e.clientX;drag.cy=e.clientY}});
+addEventListener('pointerup',()=>drag=null);
 function input(){
   if(mode==='screen'&&rt&&performance.now()-rt.t<1000)return{x:clamp(rt.x),y:clamp(rt.y)};
   if(mode==='local'&&lt)return lt;
   let ax=0,ay=0;
   if(keys.arrowleft||keys.a)ax-=1;if(keys.arrowright||keys.d)ax+=1;
   if(keys.arrowup||keys.w)ay-=1;if(keys.arrowdown||keys.s)ay+=1;
-  if(ptr){const dx=ptr.x-ball.x,dy=ptr.y-ball.y,m=Math.hypot(dx,dy)||1;ax=dx/m;ay=dy/m}
+  if(drag){ax=clamp((drag.cx-drag.x)/70);ay=clamp((drag.cy-drag.y)/70)}
   return{x:ax,y:ay};
 }
+function loseLife(why){
+  lives--;ping('h');if(mode==='local'&&navigator.vibrate)navigator.vibrate(200);
+  if(lives<=0)return over();
+  flash(why==='time'?"Time's up!":'Oops!');tleft=LEVELS[level].t;respawn();
+}
 function step(dt){
-  const t=input();
-  ball.vx+=t.x*1400*dt;ball.vy+=t.y*1400*dt;
-  ball.vx*=Math.pow(.25,dt);ball.vy*=Math.pow(.25,dt);
-  ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
-  const top=70;
-  if(ball.x<R){ball.x=R;ball.vx*=-.5}if(ball.x>W-R){ball.x=W-R;ball.vx*=-.5}
-  if(ball.y<top){ball.y=top;ball.vy*=-.5}if(ball.y>H-R){ball.y=H-R;ball.vy*=-.5}
-  inv=Math.max(0,inv-dt);
-  for(const h of haz){
-    h.x+=h.vx*dt;h.y+=h.vy*dt;
-    if(h.x<h.r||h.x>W-h.r)h.vx*=-1;if(h.y<top+h.r||h.y>H-h.r)h.vy*=-1;
-    h.x=Math.max(h.r,Math.min(W-h.r,h.x));h.y=Math.max(top+h.r,Math.min(H-h.r,h.y));
-    if(!inv&&Math.hypot(h.x-ball.x,h.y-ball.y)<h.r+R){
-      lives--;inv=1.5;ball.vx=ball.vy=0;ping('h');if(mode==='local'&&navigator.vibrate)navigator.vibrate(150);
-      if(lives<=0)return over();
-    }
+  const t=input(),G=10;ts.x+=(t.x-ts.x)*Math.min(1,dt*10);ts.y+=(t.y-ts.y)*Math.min(1,dt*10);
+  const grounded=bv.y<=R+.05&&bv.y>=R-.3&&onPlat(bv.x,bv.z);
+  if(grounded){bv.y=R;bv.vy=0;bv.vx+=ts.x*G*dt;bv.vz+=ts.y*G*dt;bv.vx*=1-.15*dt;bv.vz*=1-.15*dt}
+  else bv.vy-=26*dt;
+  bv.x+=bv.vx*dt;bv.z+=bv.vz*dt;bv.y+=bv.vy*dt;
+  if(bv.y<-12)return loseLife('fall');
+  tleft-=dt;if(tleft<=0)return loseLife('time');
+  for(let i=bananas.length-1;i>=0;i--){const b=bananas[i];
+    if(Math.hypot(b.position.x-bv.x,b.position.z-bv.z)<.9&&Math.abs(bv.y-1)<1){stage.remove(b);bananas.splice(i,1);score++;ping('o');if(mode==='local'&&navigator.vibrate)navigator.vibrate(20)}}
+  if(grounded&&Math.hypot(goalPos[0]-bv.x,goalPos[1]-bv.z)<1.2){
+    score+=Math.ceil(tleft/10);level++;
+    if(level>=LEVELS.length)return win();
+    flash('Level '+(level+1));buildLevel(level);
   }
-  for(let i=0;i<orbs.length;i++){const o=orbs[i];
-    if(Math.hypot(o.x-ball.x,o.y-ball.y)<o.r+R){score++;orbs[i]=newOrb();if(score%4===0)addHaz();ping('o');if(mode==='local'&&navigator.vibrate)navigator.vibrate(20)}}
 }
-function draw(){
-  x.clearRect(0,0,W,H);
-  for(const o of orbs){x.fillStyle=css('--orb');x.beginPath();x.arc(o.x,o.y,o.r,0,7);x.fill()}
-  for(const h of haz){x.fillStyle=css('--bad');x.beginPath();x.arc(h.x,h.y,h.r,0,7);x.fill()}
-  x.globalAlpha=inv&&Math.floor(inv*10)%2?.4:1;
-  x.fillStyle=css('--ball');x.beginPath();x.arc(ball.x,ball.y,R,0,7);x.fill();
-  x.fillStyle='rgba(255,255,255,.5)';x.beginPath();x.arc(ball.x-4,ball.y-4,4,0,7);x.fill();x.globalAlpha=1;
-  $('sc').textContent='Orbs '+score+'  ·  Best '+best;$('lv').textContent='♥'.repeat(Math.max(lives,0));
+function render(dt){
+  if(!renderer)return;
+  ball.position.set(bv.x,bv.y,bv.z);
+  ball.rotation.x+=bv.vz*dt/R;ball.rotation.z-=bv.vx*dt/R;
+  stage.rotation.set(ts.y*.32,0,-ts.x*.32);
+  const v=ball.position.clone().applyEuler(stage.rotation);stage.position.copy(ball.position).sub(v);
+  const tgt=new THREE.Vector3(bv.x,bv.y,bv.z);
+  camera.position.lerp(new THREE.Vector3(bv.x,bv.y+8,bv.z+10),1-Math.pow(.002,dt));
+  camera.lookAt(bv.x,0,bv.z-2);
+  sun.position.set(bv.x+8,20,bv.z+6);sun.target.position.copy(tgt);
+  const tm=performance.now()/1000;
+  for(const b of bananas)b.rotation.y=tm*2;
+  const ring=stage.getObjectByName('ring');if(ring)ring.rotation.y=tm;
+  renderer.render(scene,camera);
+  $('sc').textContent='🍌 '+score+'  ·  Best '+best;$('tm').textContent=Math.max(0,Math.ceil(tleft))+'s';
+  $('lv').textContent='L'+(level+1)+' '+'♥'.repeat(Math.max(lives,0));
+  if(msgT>0){msgT-=dt;if(msgT<=0)$('msg').textContent=''}
 }
-function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;if(run)step(dt);if(ball)draw();requestAnimationFrame(loop)}
-function initGame(){reset();if(!looping){looping=true;requestAnimationFrame(loop)}}
-function over(){run=false;
+function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;if(run)step(dt);render(dt);requestAnimationFrame(loop)}
+function initGame(){init3d();level=0;score=0;lives=3;buildLevel(0);camera.position.set(bv.x,bv.y+8,bv.z+10);
+  if(!looping){looping=true;requestAnimationFrame(loop)}}
+function end(title){run=false;
   if(score>best){best=score;try{localStorage.setItem('tiltball-best',best)}catch(e){}}
-  $('t').textContent='Game over — '+score+' orbs';$('go').textContent='Play again';$('ov').classList.add('on')}
-$('go').onclick=()=>{reset();$('ov').classList.remove('on');run=true};
+  $('t').textContent=title;$('go').textContent='Play again';$('ov').classList.add('on')}
+function over(){end('Game over — '+score+' pts')}
+function win(){level=LEVELS.length-1;end('You win! '+score+' pts')}
+$('go').onclick=()=>{if(run===false&&($('go').textContent==='Play again')){initGame()}else{lbase=null}
+  $('ov').classList.remove('on');run=true;lbase=null};
 </script></body></html>
