@@ -27,7 +27,7 @@ input{font-size:30px;letter-spacing:.3em;text-align:center;width:5ch;padding:10p
 </style></head><body>
 
 <div class="view on" id="menu"><div class="card"><h1>🥊 Punch Bag</h1>
-<p>Your phone becomes the arm: it tracks your phone's movement in real time. Point to aim, thrust forward to punch.</p>
+<p>Your phone becomes the arm: it tracks your phone's movement in real time and the arm stretches to follow. Point to aim, reach and thrust to punch.</p>
 <button id="bLocal">Play on this device</button><br>
 <button class="alt" id="bScreen">I'm the screen</button>
 <button class="alt" id="bPad">I'm the controller</button>
@@ -36,7 +36,7 @@ input{font-size:30px;letter-spacing:.3em;text-align:center;width:5ch;padding:10p
 <div class="view" id="screen"><canvas id="c"></canvas>
 <div id="hud"><span id="sc"></span><span id="tm"></span><span id="bs"></span></div><div id="msg"></div><button class="alt" id="rcl" style="display:none;position:fixed;bottom:16px;left:16px;font-size:14px;padding:8px 16px">Recenter</button>
 <div class="view on" id="ov"><div class="card"><h1 id="t">30-second round</h1>
-<p>Hold your phone like a fist, back of the phone facing the bag. The arm copies your phone live: point to aim, thrust forward to punch. Start recenters your aim.</p>
+<p>Hold your phone like a fist, back of the phone facing the bag. The arm copies your phone live and stretches out as you move it: point to aim, reach and thrust to punch. Start recenters your aim.</p>
 <div id="pair" style="display:none"><p>On your phone tap <b>I'm the controller</b> and enter:</p>
 <div class="code" id="code">····</div>
 <p><span class="dot" id="dot"></span><span id="stt">Waiting for phone…</span></p></div>
@@ -47,7 +47,7 @@ input{font-size:30px;letter-spacing:.3em;text-align:center;width:5ch;padding:10p
 <div class="view" id="pad"><div class="card"><h1>Controller</h1>
 <div id="s1"><p>Enter the 4-digit code shown on the screen:</p>
 <input id="ci" inputmode="numeric" maxlength="4" autocomplete="off"><br><button id="mk">Connect</button></div>
-<div id="live" style="display:none"><p><span class="dot ok"></span>Connected — arm is tracking your phone</p>
+<div id="live" style="display:none"><p><span class="dot ok"></span>Connected — arm stretches with your phone</p>
 <p style="font-size:12px">Point the back of the phone at the bag, then tap Recenter.</p><div id="bubble"><i id="bi"></i></div><button id="pb">PUNCH</button><br><button class="alt" id="rc">Recenter aim</button></div>
 <p class="err" id="perr"></p><button class="alt" id="pback">Back</button></div></div>
 
@@ -61,20 +61,21 @@ async function needMotion(){for(const E of [window.DeviceOrientationEvent,window
 function sensors(onState){
   const q=new THREE.Quaternion(),q0i=new THREE.Quaternion(),dq=new THREE.Quaternion(),eu=new THREE.Euler(),
     q1=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)),fw=new THREE.Vector3();
-  let cal=false,af=0,lastEmit=0;
+  let cal=false,af=[0,0,0],lastEmit=0,psi=0;
   const emit=()=>{const n=performance.now();if(n-lastEmit<14)return;lastEmit=n;
-    if(!cal){q0i.copy(q).invert();cal=true}
+    if(!cal){q0i.copy(q).invert();cal=true;fw.set(0,0,-1).applyQuaternion(q);psi=Math.atan2(fw.x,-fw.z)}
     dq.copy(q).multiply(q0i);onState(dq,af)};
   addEventListener('deviceorientation',e=>{if(e.beta==null)return;const r=Math.PI/180;
     eu.set(e.beta*r,(e.alpha||0)*r,-e.gamma*r,'YXZ');q.setFromEuler(eu).multiply(q1);emit()});
   addEventListener('devicemotion',e=>{const a=e.acceleration;
-    if(a&&a.x!=null){const w=new THREE.Vector3(a.x,a.y,a.z).applyQuaternion(q);fw.set(0,0,-1).applyQuaternion(q);af=w.dot(fw)}
+    if(a&&a.x!=null){const w=new THREE.Vector3(a.x,a.y,a.z).applyQuaternion(q),c=Math.cos(psi),sn=Math.sin(psi);
+      af=[w.x*c+w.z*sn,w.y,-w.x*sn+w.z*c]}
     emit()});
   return{recenter(){cal=false}};
 }
 /* ---------- menu ---------- */
 let mode='local',dc=null,lastN=null,gyro=false,aimL={x:0,y:0},localSens=null;
-const track={have:false,q:new THREE.Quaternion(),a:0,t:0};
+const track={have:false,q:new THREE.Quaternion(),a:[0,0,0],t:0};
 function setTrack(q,a){track.have=true;track.q.set(q[0],q[1],q[2],q[3]);track.a=a;track.t=performance.now()}
 $('bLocal').onclick=async()=>{mode='local';show('screen');$('pair').style.display='none';
   try{await needMotion();localSens=sensors((q,a)=>{gyro=true;setTrack(q.toArray(),a)});$('rcl').style.display='block'}catch(e){$('serr').textContent=e.message+' Using mouse/touch.'}
@@ -91,7 +92,7 @@ function makePeer(){
   peer.on('error',e=>{if(e.type==='unavailable-id'){peer.destroy();makePeer()}else $('serr').textContent='Pairing error: '+e.type});
   peer.on('connection',conn=>{dc=conn;
     conn.on('open',()=>{$('dot').className='dot ok';$('stt').textContent='Phone connected!'});
-    conn.on('data',d=>{if(!d||typeof d!=='object')return;if(d.q)setTrack(d.q,d.a||0);
+    conn.on('data',d=>{if(!d||typeof d!=='object')return;if(d.q)setTrack(d.q,d.a||[0,0,0]);
       if(lastN===null)lastN=d.n;else if(d.n!==lastN){lastN=d.n;fire(.85)}});
     conn.on('close',()=>{$('dot').className='dot';$('stt').textContent='Disconnected';track.have=false})});
 }
@@ -108,7 +109,7 @@ $('mk').onclick=async()=>{$('perr').textContent='';
     pdc.on('open',()=>{$('s1').style.display='none';$('live').style.display='block';
       sens=sensors((q,a)=>{const v=new THREE.Vector3(0,0,-1).applyQuaternion(q);
         $('bi').style.left=(43+v.x*38)+'px';$('bi').style.top=(43-v.y*38)+'px';
-        if(pdc.open)pdc.send({q:q.toArray().map(n=>+n.toFixed(4)),a:+a.toFixed(2),n:pn})})});
+        if(pdc.open)pdc.send({q:q.toArray().map(n=>+n.toFixed(4)),a:a.map(n=>+n.toFixed(2)),n:pn})})});
     pdc.on('data',m=>{if(m&&m.h&&navigator.vibrate)navigator.vibrate(30+m.h*200)});
     pdc.on('close',()=>{$('perr').textContent='Disconnected.'})});
   p.on('error',e=>{$('perr').textContent=e.type==='peer-unavailable'?'No screen found with that code.':'Pairing error: '+e.type});
@@ -118,6 +119,7 @@ $('pb').onclick=()=>pn++;$('rcl').onclick=()=>localSens&&localSens.recenter();$(
 let renderer,scene,camera,inited=false,looping=false,last=0,run=false;
 let upper,fore,elbowM,glove,bagG,bagM,shadow,score=0,tleft=30,best=0,combo=0,lastHit=0,shake=0,msgT=0;
 let ax=0,az=0,wx=0,wz=0,aim={x:0,y:0},charge=0,ext=0,extv=0,prevFist=null,lastHitT=0;
+const pp=new THREE.Vector3(),pv=new THREE.Vector3(),curDir=new THREE.Vector3(0,0,-1);
 try{best=+localStorage.getItem('punchbag-best')||0}catch(e){}
 const S=new THREE.Vector3(1.3,1.5,4.0),PIV=new THREE.Vector3(0,6,0),L=3.2,Y=new THREE.Vector3(0,1,0);
 const mat=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.6},o));
@@ -146,8 +148,8 @@ function init3d(){
   addEventListener('resize',rs);rs();
 }
 function rs(){if(!renderer)return;const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w<h?80:58;camera.updateProjectionMatrix()}
-const limb=(m,a,b)=>{const v=b.clone().sub(a);m.position.copy(a).addScaledVector(v,.5);m.quaternion.setFromUnitVectors(Y,v.clone().normalize());m.scale.set(1,v.length(),1)};
-function fire(p){if(run)extv+=18*clamp(p,.2,1)}
+const limb=(m,a,b)=>{const v=b.clone().sub(a);m.position.copy(a).addScaledVector(v,.5);m.quaternion.setFromUnitVectors(Y,v.clone().normalize());const len=v.length(),k=len>2.05?Math.sqrt(2.05/len):1;m.scale.set(k,len,k)};
+function fire(p){if(run)pv.addScaledVector(curDir,18*clamp(p,.2,1))}
 $('c').addEventListener('pointerdown',()=>{charge=performance.now()});
 addEventListener('pointerup',()=>{if(charge&&!track.have){fire(.35+Math.min(1,(performance.now()-charge)/900)*.65)}charge=0});
 addEventListener('pointermove',e=>{if(!track.have&&mode==='local'){aimL.x=(e.clientX/innerWidth-.5)*2;aimL.y=-(e.clientY/innerHeight-.5)*2}});
@@ -166,15 +168,18 @@ function frame(dt){
   bagG.rotation.set(ax,0,az);bagG.updateMatrixWorld(true);
   const bc=new THREE.Vector3();bagM.getWorldPosition(bc);
   shadow.position.x=bc.x;shadow.position.z=bc.z;
-  /* live thrust: phone forward acceleration drives a spring-mounted fist */
-  const acc=(tracking?3*track.a:0)-60*ext-14*extv;
-  extv+=acc*dt;ext+=extv*dt;
-  if(ext>1.05){ext=1.05;extv=Math.min(extv,0)}if(ext<-.35){ext=-.35;extv=Math.max(extv,0)}
-  const d=clamp(2.5+ext*1.45,1.8,3.95),fist=S.clone().addScaledVector(dir,d);
-  const down=new THREE.Vector3(0,-1,0),perp=down.sub(dir.clone().multiplyScalar(down.dot(dir))).normalize();
-  const elbow=S.clone().addScaledVector(dir,d/2).addScaledVector(perp,Math.sqrt(Math.max(.01,4-d*d/4)));
+  /* live position: your phone's movement stretches the arm */
+  curDir.copy(dir);
+  if(tracking){const dz=v=>Math.abs(v)>.4?v:0;
+    pv.x+=dz(track.a[0])*9*dt;pv.y+=dz(track.a[1])*9*dt;pv.z+=dz(track.a[2])*9*dt}
+  pv.multiplyScalar(Math.exp(-2.5*dt));pp.addScaledVector(pv,dt);pp.multiplyScalar(Math.exp(-1.2*dt));
+  if(pp.length()>6)pp.setLength(6);
+  const target=S.clone().addScaledVector(dir,2.6).add(pp),vec=target.clone().sub(S);
+  const D=clamp(vec.length(),1.6,8),u=vec.normalize(),fist=S.clone().addScaledVector(u,D);
+  const down=new THREE.Vector3(0,-1,0),perp=down.sub(u.clone().multiplyScalar(down.dot(u))).normalize();
+  const elbow=S.clone().addScaledVector(u,D/2).addScaledVector(perp,Math.sqrt(Math.max(0,4-D*D/4)));
   limb(upper,S,elbow);limb(fore,elbow,fist);elbowM.position.copy(elbow);glove.position.copy(fist);
-  glove.lookAt(fist.clone().add(dir));
+  glove.lookAt(fist.clone().add(u));
   /* hit: fist speed decides power */
   const vel=prevFist&&dt>0?fist.clone().sub(prevFist).divideScalar(dt):new THREE.Vector3();prevFist=fist.clone();
   const speed=vel.length(),n=performance.now();
@@ -193,7 +198,7 @@ function frame(dt){
 }
 function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;if(run)step(dt);frame(dt);requestAnimationFrame(loop)}
 function initGame(){if(typeof THREE==='undefined'){$('serr').textContent='Could not load the 3D library (needs internet).';return}
-  init3d();score=0;tleft=30;combo=0;wx=wz=ax=az=ext=extv=0;
+  init3d();score=0;tleft=30;combo=0;wx=wz=ax=az=0;pp.set(0,0,0);pv.set(0,0,0);
   if(!looping){looping=true;requestAnimationFrame(loop)}}
 function end(){run=false;
   if(score>best){best=score;try{localStorage.setItem('punchbag-best',best)}catch(e){}}
